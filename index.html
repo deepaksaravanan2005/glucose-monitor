@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Blood Glucose Monitoring</title>
+
+  <!-- Chart -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Excel Reader -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #f5e6d3 0%, #e8d5c4 100%);
+      min-height: 100vh;
+      padding-bottom: 40px;
+    }
+
+    header {
+      background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+      color: white;
+      text-align: center;
+      padding: 40px 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    }
+
+    header h1 {
+      font-size: 2.5em;
+      margin-bottom: 10px;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+      letter-spacing: 1px;
+    }
+
+    header p {
+      font-size: 1.1em;
+      opacity: 0.95;
+      font-weight: 300;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .card {
+      background: #fffbf7;
+      padding: 30px;
+      border-radius: 15px;
+      margin-bottom: 25px;
+      box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+      border-top: 4px solid #d4a574;
+    }
+
+    .card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 12px 35px rgba(0,0,0,0.2);
+    }
+
+    .card h2 {
+      color: #333;
+      margin-bottom: 15px;
+      font-size: 1.5em;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    input {
+      width: 100%;
+      padding: 12px 15px;
+      margin-top: 10px;
+      font-size: 16px;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      transition: border-color 0.3s ease, box-shadow 0.3s ease;
+      font-family: 'Segoe UI', sans-serif;
+    }
+
+    input:focus {
+      outline: none;
+      border-color: #e74c3c;
+      box-shadow: 0 0 0 3px rgba(231, 76, 60, 0.1);
+    }
+
+    button {
+      width: 100%;
+      padding: 14px;
+      margin-top: 15px;
+      font-size: 16px;
+      background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(231, 76, 60, 0.3);
+    }
+
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(231, 76, 60, 0.4);
+    }
+
+    button:active {
+      transform: translateY(0);
+    }
+
+    #value {
+      font-size: 4em;
+      color: #c9794a;
+      margin: 20px 0;
+      text-align: center;
+      font-weight: bold;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    #status {
+      text-align: center;
+      font-size: 1.8em;
+      padding: 15px;
+      border-radius: 10px;
+      margin: 15px 0;
+      font-weight: 600;
+      transition: all 0.3s ease;
+    }
+
+    #status.low {
+      color: white;
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    }
+
+    #status.normal {
+      color: white;
+      background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    }
+
+    #status.high {
+      color: white;
+      background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+    }
+
+    #status -- {
+      color: #999;
+      background: #f5f5f5;
+    }
+
+    canvas {
+      margin-top: 20px;
+      border-radius: 10px;
+    }
+
+    .result-box {
+      background: linear-gradient(135deg, rgba(212, 165, 116, 0.15) 0%, rgba(230, 200, 160, 0.15) 100%);
+      padding: 20px;
+      border-radius: 10px;
+      margin-top: 15px;
+      text-align: center;
+      border-left: 4px solid #d4a574;
+    }
+
+    .result-box h3 {
+      color: #333;
+      margin-bottom: 10px;
+    }
+
+    #manualResult {
+      font-size: 1.2em;
+      color: #c9794a;
+      font-weight: 600;
+    }
+
+    input[type="file"]::file-selector-button {
+      padding: 10px 20px;
+      background: #e74c3c;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.3s ease;
+    }
+
+    input[type="file"]::file-selector-button:hover {
+      background: #c0392b;
+    }
+  </style>
+</head>
+
+<body>
+
+<header>
+  <h1>Blood Glucose Monitoring</h1>
+  <p>Manual + ML-Trained Dataset → ThingSpeak</p>
+</header>
+
+<div class="container">
+
+  <!-- ThingSpeak Configuration -->
+  <div class="card" style="background: #fff3cd; border-left: 5px solid #ffc107; display: none;">
+    <h2>⚙️ ThingSpeak Configuration</h2>
+    <p style="color: #856404; margin: 10px 0;">Add your ThingSpeak API Keys below for data storage:</p>
+    <input type="text" id="writeApiKey" placeholder="Enter WRITE API Key (from ThingSpeak channel)" value="VUIUBUT0ARDHGV6R">
+    <input type="text" id="readApiKey" placeholder="Enter READ API Key (optional, from ThingSpeak channel)">
+    <button onclick="saveApiKeys()" style="background: #ffc107; color: black;">Save API Keys</button>
+    <p id="apiStatus" style="color: green; margin-top: 10px;">✓ API Keys ready</p>
+  </div>
+
+  <!-- Manual Input -->
+  <div class="card">
+    <h2>📊 Manual Input</h2>
+    <input type="number" id="manualValue" placeholder="Enter glucose value (mg/dL)" min="0" max="500">
+    <button onclick="manualAnalyze()">🔍 Analyze Manual Input</button>
+    <div class="result-box" style="display: none;" id="manualResultBox">
+      <h3 id="manualResult">--</h3>
+    </div>
+  </div>
+
+  <!-- Excel Upload -->
+  <div class="card">
+    <h2>📁 Upload Dataset (Excel)</h2>
+    <p style="color: #666; margin-bottom: 10px;">Upload your frequency response data in Excel format</p>
+    <div id="modelStatus" style="padding: 10px; margin-bottom: 10px; border-radius: 5px; font-weight: bold; text-align: center; background: #fff3cd; color: #856404;">
+      ⏳ Loading ML Model... Please wait 2-3 seconds
+    </div>
+    <input type="file" id="excelFile" accept=".xlsx,.xls">
+    <button onclick="readExcel()">📤 Analyze Dataset</button>
+  </div>
+
+  <!-- Output -->
+  <div class="card">
+    <h2>📈 Glucose Analysis Result</h2>
+    <h1 id="value">-- mg/dL</h1>
+    <h2 id="status">--</h2>
+    <canvas id="chart"></canvas>
+  </div>
+
+</div>
+
+<script>
+  let chart;
+
+  /* ===== ThingSpeak Config ===== */
+  let WRITE_API_KEY = localStorage.getItem('writeApiKey') || "VUIUBUT0ARDHGV6R";
+  let READ_API_KEY = localStorage.getItem('readApiKey') || "";
+  
+  // Load saved keys on page load
+  function loadSavedKeys() {
+    const savedWriteKey = localStorage.getItem('writeApiKey');
+    const savedReadKey = localStorage.getItem('readApiKey');
+    
+    if (document.getElementById('writeApiKey')) {
+      document.getElementById('writeApiKey').value = savedWriteKey || "VUIUBUT0ARDHGV6R";
+    }
+    if (document.getElementById('readApiKey')) {
+      document.getElementById('readApiKey').value = savedReadKey || "";
+    }
+  }
+  
+  // Save API keys to localStorage
+  function saveApiKeys() {
+    const writeKey = document.getElementById('writeApiKey').value.trim();
+    const readKey = document.getElementById('readApiKey').value.trim();
+    
+    if (!writeKey) {
+      alert("Please enter a WRITE API Key");
+      return;
+    }
+    
+    localStorage.setItem('writeApiKey', writeKey);
+    localStorage.setItem('readApiKey', readKey);
+    
+    WRITE_API_KEY = writeKey;
+    READ_API_KEY = readKey;
+    
+    const statusEl = document.getElementById('apiStatus');
+    statusEl.innerText = "✓ API Keys saved successfully!";
+    statusEl.style.color = "green";
+    console.log("API Keys saved. WRITE KEY: " + writeKey.substring(0, 5) + "...");
+    if (readKey) console.log("READ KEY: " + readKey.substring(0, 5) + "...");
+  }
+  
+  // ML Model variables
+  let knnModel = null;
+  let scaler = null;
+  let pca = null;
+  let trainingLabels = null;
+
+  function uploadToThingSpeak(glucose) {
+    if (!WRITE_API_KEY || WRITE_API_KEY === "") {
+      console.warn("ThingSpeak WRITE API key not configured. Please add your API key.");
+      return;
+    }
+    const url = `https://api.thingspeak.com/update?api_key=${WRITE_API_KEY}&field1=${glucose}`;
+    console.log("Uploading to ThingSpeak: " + glucose + " mg/dL");
+    fetch(url)
+      .then(response => {
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        return response.text();
+      })
+      .then(data => {
+        console.log("✓ Data uploaded to ThingSpeak! Entry ID: " + data);
+        alert("✓ Glucose reading (" + glucose + " mg/dL) sent to ThingSpeak!");
+      })
+      .catch(error => {
+        console.error("✗ Error uploading to ThingSpeak:", error);
+        alert("✗ Error uploading to ThingSpeak: " + error.message);
+      });
+  }
+
+  /* ===== Classification ===== */
+  function classify(value) {
+    if (value < 100) return { text: "LOW", class: "low" };
+    else if (value <= 150) return { text: "NORMAL", class: "normal" };
+    else return { text: "HIGH", class: "high" };
+  }
+
+  /* ===== Load CSV Training Data ===== */
+  async function loadTrainingData() {
+    try {
+      console.log("Starting to load training data...");
+      const response = await fetch('SUGAR UPTO 1000MG_approx.csv');
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch CSV: ' + response.statusText);
+      }
+      
+      const csvText = await response.text();
+      console.log("CSV loaded, size: " + csvText.length + " bytes");
+      
+      // Parse CSV
+      const lines = csvText.split('\n').filter(line => line.trim());
+      console.log("Total lines: " + lines.length);
+      
+      const headers = lines[0].split(',').map(h => h.trim());
+      console.log("Headers (" + headers.length + "): " + headers.slice(0, 5).join(", ") + "...");
+      
+      // Store all training data: glucose level -> return loss values
+      const trainingData = {};
+      
+      // Extract glucose levels and their corresponding data
+      for (let col = 1; col < headers.length; col++) {
+        const glucoseCol = headers[col].trim();
+        const glucoseLevel = parseInt(glucoseCol.replace('MG', ''));
+        
+        const values = [];
+        for (let row = 1; row < lines.length; row++) {
+          const parts = lines[row].split(',');
+          const val = parseFloat(parts[col].trim());
+          if (!isNaN(val)) {
+            values.push(val);
+          }
+        }
+        
+        if (values.length > 0) {
+          trainingData[glucoseLevel] = values;
+          console.log("Loaded " + glucoseLevel + "MG: " + values.length + " data points, avg: " + (values.reduce((a,b)=>a+b)/values.length).toFixed(4));
+        }
+      }
+      
+      // Create KNN model with glucose levels as labels
+      knnModel = {
+        trainingData: trainingData,
+        glucoseLevels: Object.keys(trainingData).map(x => parseInt(x)).sort((a, b) => a - b)
+      };
+      
+      console.log("✓ Training data loaded successfully!");
+      console.log("✓ Glucose levels available: " + knnModel.glucoseLevels.join(", "));
+      console.log("✓ ML Model ready for prediction!");
+      return true;
+    } catch (error) {
+      console.error('✗ Error loading training data:', error);
+      alert("Error loading training data: " + error.message);
+      return false;
+    }
+  }
+  
+  // Calculate similarity between two arrays (lower = more similar)
+  function calculateDistance(values1, values2) {
+    if (values1.length !== values2.length) return Infinity;
+    
+    let sumSquaredDiff = 0;
+    for (let i = 0; i < values1.length; i++) {
+      const diff = values1[i] - values2[i];
+      sumSquaredDiff += diff * diff;
+    }
+    
+    return Math.sqrt(sumSquaredDiff / values1.length);
+  }
+  
+  // Predict glucose level using similarity matching
+  function predict(sample) {
+    if (!knnModel) {
+      console.error("knnModel is not initialized!");
+      return null;
+    }
+    
+    if (!sample || sample.length === 0) {
+      console.error("Sample is empty!");
+      return null;
+    }
+    
+    console.log("Predicting for sample of " + sample.length + " points");
+    
+    let bestMatch = null;
+    let bestDistance = Infinity;
+    const distances = [];
+    
+    // Compare input sample to each training glucose level
+    for (let glucoseLevel of knnModel.glucoseLevels) {
+      const trainingValues = knnModel.trainingData[glucoseLevel];
+      
+      if (!trainingValues || trainingValues.length === 0) {
+        console.warn("No training data for " + glucoseLevel + "MG");
+        continue;
+      }
+      
+      // Pad or trim to same length
+      let val1 = sample;
+      let val2 = trainingValues;
+      
+      if (val1.length !== val2.length) {
+        const minLen = Math.min(val1.length, val2.length);
+        val1 = val1.slice(0, minLen);
+        val2 = val2.slice(0, minLen);
+      }
+      
+      const distance = calculateDistance(val1, val2);
+      distances.push({ glucose: glucoseLevel, distance: distance });
+      
+      console.log("  Distance to " + glucoseLevel + "MG: " + distance.toFixed(6));
+      
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestMatch = glucoseLevel;
+      }
+    }
+    
+    // Sort and show top 3 matches
+    distances.sort((a, b) => a.distance - b.distance);
+    console.log("✓ Best prediction: " + bestMatch + "MG (distance: " + bestDistance.toFixed(6) + ")");
+    return bestMatch;
+  }
+
+  /* ===== Manual Input ===== */
+  function manualAnalyze() {
+    const value = parseInt(document.getElementById("manualValue").value);
+    if (isNaN(value)) {
+      alert("Please enter a valid glucose value");
+      return;
+    }
+
+    const result = classify(value);
+    const resultBox = document.getElementById("manualResultBox");
+    document.getElementById("manualResult").innerText =
+      "✓ " + value + " mg/dL → " + result.text.toUpperCase();
+    resultBox.style.display = "block";
+    resultBox.className = "result-box";
+    resultBox.querySelector("h3").className = result.class;
+
+    showResult(value);
+    uploadToThingSpeak(value);
+  }
+
+  /* ===== Excel Dataset ===== */
+  function readExcel() {
+    const file = document.getElementById("excelFile").files[0];
+    if (!file) {
+      alert("Please select an Excel file first");
+      return;
+    }
+
+    // Check if model is loaded
+    if (!knnModel) {
+      alert("⏳ ML Model is still loading. Please wait 2-3 seconds and try again.");
+      console.warn("knnModel not ready yet");
+      return;
+    }
+
+    console.log("Reading file: " + file.name);
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: "array" });
+
+        console.log("Sheet names: " + workbook.SheetNames.join(", "));
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+        console.log("Total rows in Excel: " + rows.length);
+        console.log("First 3 rows: " + JSON.stringify(rows.slice(0, 3)));
+
+        let frequency = [];
+        let returnLossValues = [];
+
+        // Parse Excel data (assuming columns: Frequency, Return Loss)
+        for (let i = 1; i < rows.length; i++) {
+          if (rows[i] && rows[i].length >= 2) {
+            const freq = rows[i][0];
+            const loss = rows[i][1];
+            
+            // Check if both values are numbers
+            if (!isNaN(freq) && !isNaN(loss)) {
+              frequency.push(freq);
+              returnLossValues.push(parseFloat(loss));
+            }
+          }
+        }
+
+        console.log("Parsed data points: " + returnLossValues.length);
+        if (returnLossValues.length === 0) {
+          alert("Invalid Excel format. Please make sure:\n1. Column 1: Frequency (GHz)\n2. Column 2: Return Loss (dB)\n3. Data starts from row 2");
+          return;
+        }
+
+        console.log("Return Loss sample (first 5): " + returnLossValues.slice(0, 5).map(v => v.toFixed(2)).join(", "));
+
+        // Use ML model to predict glucose level
+        let predictedGlucose = null;
+        
+        console.log("Training model loaded: " + (knnModel ? "YES" : "NO"));
+        
+        if (!knnModel) {
+          alert("Error: Training model not loaded!");
+          console.error("knnModel is null or undefined");
+          return;
+        }
+
+        console.log("Starting prediction...");
+        predictedGlucose = predict(returnLossValues);
+        
+        // If prediction still failed, show error
+        if (predictedGlucose === null) {
+          alert("Error: Could not predict glucose level.\nPlease check console for details.");
+          console.error("Prediction returned null");
+          return;
+        }
+        
+        console.log("=== FINAL PREDICTION: " + predictedGlucose + " mg/dL ===");
+
+        showResult(predictedGlucose);
+        uploadToThingSpeak(predictedGlucose);
+
+        if (chart) chart.destroy();
+        chart = new Chart(document.getElementById("chart"), {
+          type: "line",
+          data: {
+            labels: frequency,
+            datasets: [{
+              label: "Return Loss (dB)",
+              data: returnLossValues,
+              borderColor: '#e74c3c',
+              backgroundColor: 'rgba(231, 76, 60, 0.1)',
+              borderWidth: 2,
+              fill: true
+            }]
+          },
+          options: {
+            responsive: true,
+            plugins: {
+              title: {
+                display: true,
+                text: 'Frequency vs Return Loss'
+              }
+            },
+            scales: {
+              y: {
+                title: {
+                  display: true,
+                  text: 'Return Loss (dB)'
+                }
+              },
+              x: {
+                title: {
+                  display: true,
+                  text: 'Frequency (GHz)'
+                }
+              }
+            }
+          }
+        });
+      } catch (error) {
+        console.error("Error processing Excel file:", error);
+        alert("Error: " + error.message);
+      }
+    };
+
+    reader.readAsArrayBuffer(file);
+  }
+
+  /* ===== Show Final Result ===== */
+  function showResult(glucose) {
+    const result = classify(glucose);
+    document.getElementById("value").innerText = glucose + " mg/dL";
+    document.getElementById("status").innerText = result.text;
+    document.getElementById("status").className = result.class;
+  }
+
+  /* ===== Page Load Initialization ===== */
+  window.addEventListener('load', function() {
+    console.log("Page loaded, initializing...");
+    loadSavedKeys();
+    
+    // Load training data
+    loadTrainingData().then(function(success) {
+      const statusEl = document.getElementById('modelStatus');
+      if (success && knnModel) {
+        statusEl.innerHTML = "✓ ML Model ready! You can now upload files";
+        statusEl.style.background = "#d4edda";
+        statusEl.style.color = "#155724";
+        console.log("✓ ML Model initialized successfully");
+      } else {
+        statusEl.innerHTML = "✗ Error loading ML model. Please refresh the page.";
+        statusEl.style.background = "#f8d7da";
+        statusEl.style.color = "#721c24";
+        console.error("✗ Failed to load ML model");
+      }
+    });
+  });
+</script>
+
+</body>
+</html>

@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Excel Upload</title>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+    <style>
+        body { font-family: Arial; margin: 20px; }
+        .debug-box { background: #f0f0f0; padding: 15px; margin: 10px 0; border-radius: 5px; }
+        pre { background: white; padding: 10px; border-left: 3px solid red; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>Debug Excel Upload</h1>
+    <input type="file" id="fileInput" accept=".xlsx">
+    <button onclick="debugExcel()">Debug File</button>
+    <div id="output"></div>
+
+    <script>
+        function debugExcel() {
+            const file = document.getElementById('fileInput').files[0];
+            if (!file) {
+                alert('Please select a file');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const output = document.getElementById('output');
+                output.innerHTML = '';
+
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: "array" });
+
+                    // Debug info
+                    let html = '<div class="debug-box"><strong>File Info:</strong><pre>';
+                    html += 'File name: ' + file.name + '\n';
+                    html += 'File size: ' + (file.size / 1024).toFixed(2) + ' KB\n';
+                    html += 'Sheet names: ' + workbook.SheetNames.join(', ') + '\n';
+                    html += '</pre></div>';
+
+                    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+                    html += '<div class="debug-box"><strong>Data Info:</strong><pre>';
+                    html += 'Total rows: ' + rows.length + '\n';
+                    html += 'Row with headers: ' + JSON.stringify(rows[0]) + '\n';
+                    html += '</pre></div>';
+
+                    // Parse data
+                    let frequency = [];
+                    let returnLoss = [];
+                    let errors = 0;
+
+                    for (let i = 1; i < rows.length; i++) {
+                        if (rows[i] && rows[i].length >= 2) {
+                            const freq = rows[i][0];
+                            const loss = rows[i][1];
+
+                            if (!isNaN(freq) && !isNaN(loss)) {
+                                frequency.push(freq);
+                                returnLoss.push(parseFloat(loss));
+                            } else {
+                                errors++;
+                            }
+                        }
+                    }
+
+                    html += '<div class="debug-box"><strong>Parse Results:</strong><pre>';
+                    html += 'Valid data points: ' + returnLoss.length + '\n';
+                    html += 'Parsing errors: ' + errors + '\n';
+                    html += 'First 5 frequencies: ' + frequency.slice(0, 5).map(f => f.toFixed(3)).join(', ') + '\n';
+                    html += 'First 5 return loss: ' + returnLoss.slice(0, 5).map(l => l.toFixed(4)).join(', ') + '\n';
+                    html += 'Min return loss: ' + Math.min(...returnLoss).toFixed(4) + '\n';
+                    html += 'Max return loss: ' + Math.max(...returnLoss).toFixed(4) + '\n';
+                    html += 'Avg return loss: ' + (returnLoss.reduce((a,b)=>a+b)/returnLoss.length).toFixed(4) + '\n';
+                    html += '</pre></div>';
+
+                    if (returnLoss.length > 0) {
+                        html += '<div class="debug-box" style="background: #90EE90;"><strong>✓ SUCCESS - File is valid!</strong></div>';
+                    } else {
+                        html += '<div class="debug-box" style="background: #FFB6C1;"><strong>✗ FAILURE - No valid data found!</strong></div>';
+                    }
+
+                    output.innerHTML = html;
+
+                } catch (error) {
+                    output.innerHTML = '<div class="debug-box" style="background: #FFB6C1;"><strong>Error reading file:</strong><pre>' + error.message + '</pre></div>';
+                }
+            };
+
+            reader.readAsArrayBuffer(file);
+        }
+    </script>
+</body>
+</html>

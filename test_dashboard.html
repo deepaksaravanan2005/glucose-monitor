@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Quick Test - Blood Glucose Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+    <style>
+        body { font-family: Arial; margin: 20px; background: #f5e6d3; }
+        .box { background: white; padding: 20px; margin: 10px 0; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        button { background: #e74c3c; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 14px; }
+        button:hover { background: #c0392b; }
+        input { padding: 8px; margin: 10px 0; width: 300px; }
+        #output { background: #f9f9f9; padding: 15px; border-left: 4px solid #e74c3c; margin: 20px 0; }
+        .success { color: green; font-weight: bold; }
+        .error { color: red; font-weight: bold; }
+        .info { color: blue; }
+        h1 { color: #e74c3c; }
+    </style>
+</head>
+<body>
+    <h1>Blood Glucose Monitoring - Quick Test</h1>
+    
+    <div class="box">
+        <h3>Step 1: Check if CSV loads</h3>
+        <button onclick="testCSVLoad()">Test CSV Load</button>
+        <div id="csvOutput"></div>
+    </div>
+
+    <div class="box">
+        <h3>Step 2: Upload Excel File</h3>
+        <input type="file" id="excelInput" accept=".xlsx">
+        <button onclick="testExcelUpload()">Test Excel Upload</button>
+        <div id="excelOutput"></div>
+    </div>
+
+    <div class="box">
+        <h3>Step 3: Final Result</h3>
+        <div id="finalOutput"></div>
+    </div>
+
+    <script>
+        let trainingData = null;
+
+        async function testCSVLoad() {
+            const output = document.getElementById('csvOutput');
+            output.innerHTML = '<p class="info">Loading CSV...</p>';
+
+            try {
+                const response = await fetch('SUGAR UPTO 1000MG_approx.csv');
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+
+                const text = await response.text();
+                const lines = text.split('\n').filter(l => l.trim());
+                const headers = lines[0].split(',');
+
+                // Parse training data
+                trainingData = {};
+                for (let col = 1; col < headers.length; col++) {
+                    const glucose = parseInt(headers[col].trim().replace('MG', ''));
+                    const values = [];
+                    
+                    for (let row = 1; row < lines.length; row++) {
+                        const parts = lines[row].split(',');
+                        const val = parseFloat(parts[col].trim());
+                        if (!isNaN(val)) values.push(val);
+                    }
+                    
+                    trainingData[glucose] = values;
+                }
+
+                output.innerHTML = '<p class="success">✓ CSV Loaded Successfully!</p>' +
+                    '<p>Glucose levels: ' + Object.keys(trainingData).sort((a,b)=>a-b).join(', ') + '</p>' +
+                    '<p>Data samples: ' + Object.keys(trainingData).length + '</p>';
+            } catch (e) {
+                output.innerHTML = '<p class="error">✗ Error: ' + e.message + '</p>';
+            }
+        }
+
+        function calculateDistance(a1, a2) {
+            if (a1.length !== a2.length) {
+                const minLen = Math.min(a1.length, a2.length);
+                a1 = a1.slice(0, minLen);
+                a2 = a2.slice(0, minLen);
+            }
+            let sum = 0;
+            for (let i = 0; i < a1.length; i++) {
+                sum += (a1[i] - a2[i]) ** 2;
+            }
+            return Math.sqrt(sum / a1.length);
+        }
+
+        function predictGlucose(sample) {
+            if (!trainingData) return null;
+
+            let bestMatch = null;
+            let bestDist = Infinity;
+
+            for (let glucose in trainingData) {
+                const dist = calculateDistance(sample, trainingData[glucose]);
+                if (dist < bestDist) {
+                    bestDist = dist;
+                    bestMatch = parseInt(glucose);
+                }
+            }
+
+            return bestMatch;
+        }
+
+        function testExcelUpload() {
+            const file = document.getElementById('excelInput').files[0];
+            if (!file) {
+                document.getElementById('excelOutput').innerHTML = '<p class="error">Please select a file first</p>';
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: "array" });
+                    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+                    let returnLoss = [];
+                    for (let i = 1; i < rows.length; i++) {
+                        if (rows[i] && rows[i].length >= 2) {
+                            const val = parseFloat(rows[i][1]);
+                            if (!isNaN(val)) returnLoss.push(val);
+                        }
+                    }
+
+                    if (returnLoss.length === 0) throw new Error('No valid data found');
+
+                    const glucose = predictGlucose(returnLoss);
+
+                    document.getElementById('excelOutput').innerHTML = '<p class="success">✓ File Processed!</p>' +
+                        '<p>Data points: ' + returnLoss.length + '</p>' +
+                        '<p>Prediction: <strong>' + glucose + ' mg/dL</strong></p>';
+
+                    document.getElementById('finalOutput').innerHTML = '<h2 style="color: #e74c3c; font-size: 48px; text-align: center;">' + glucose + ' mg/dL</h2>';
+                } catch (e) {
+                    document.getElementById('excelOutput').innerHTML = '<p class="error">✗ Error: ' + e.message + '</p>';
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        // Auto-load CSV on page load
+        window.addEventListener('load', testCSVLoad);
+    </script>
+</body>
+</html>
